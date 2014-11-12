@@ -70,13 +70,15 @@ namespace KSPAdvancedFlyByWire
 
         private void UpdateFlightProperties(ControllerConfiguration config, FlightCtrlState state)
         {
-            state.yawTrim = m_Yaw.GetTrim();
-            state.pitchTrim = m_Pitch.GetTrim();
-            state.rollTrim = m_Roll.GetTrim();
+            float precisionModeFactor = AdvancedFlyByWire.Instance.GetPrecisionFactor();
 
-            state.yaw = Utility.Clamp(state.yaw + m_Yaw.Update(), -1.0f, 1.0f);
-            state.pitch = Utility.Clamp(state.pitch + m_Pitch.Update(), -1.0f, 1.0f);
-            state.roll = Utility.Clamp(state.roll + m_Roll.Update(), -1.0f, 1.0f);
+            state.yawTrim = m_Yaw.GetTrim() * precisionModeFactor;
+            state.pitchTrim = m_Pitch.GetTrim() * precisionModeFactor;
+            state.rollTrim = m_Roll.GetTrim() * precisionModeFactor;
+
+            state.yaw = Utility.Clamp(state.yaw + m_Yaw.Update() * precisionModeFactor, -1.0f, 1.0f);
+            state.pitch = Utility.Clamp(state.pitch + m_Pitch.Update() * precisionModeFactor, -1.0f, 1.0f);
+            state.roll = Utility.Clamp(state.roll + m_Roll.Update() * precisionModeFactor, -1.0f, 1.0f);
 
             state.X = Utility.Clamp(state.X + m_X.Update(), -1.0f, 1.0f);
             state.Y = Utility.Clamp(state.Y + m_Y.Update(), -1.0f, 1.0f);
@@ -89,11 +91,96 @@ namespace KSPAdvancedFlyByWire
             state.wheelSteer = Utility.Clamp(state.wheelSteer + m_WheelSteer.Update(), -1.0f, 1.0f);
             state.wheelThrottle = Utility.Clamp(state.wheelThrottle + m_WheelThrottle.Update(), -1.0f, 1.0f);
 
-            FlightCamera.CamHdg += m_CameraHeading.Update() * config.cameraSensitivity;
-            FlightCamera.CamPitch += m_CameraPitch.Update() * config.cameraSensitivity;
-            if (FlightCamera.fetch != null)
+
+            if (MapView.MapIsEnabled && MapView.MapCamera != null)
             {
-                FlightCamera.fetch.SetDistance(FlightCamera.fetch.Distance + m_CameraZoom.Update());
+                PlanetariumCamera cam = MapView.MapCamera;
+                cam.camHdg += m_CameraHeading.Update() * config.cameraSensitivity;
+                cam.camPitch += m_CameraPitch.Update() * config.cameraSensitivity;
+
+                cam.SetDistance(Utility.Clamp(cam.Distance + (0.05f * cam.Distance * m_CameraZoom.Update()), cam.minDistance, cam.maxDistance)); //zoom constant
+            }
+            else if (CameraManager.Instance.currentCameraMode == CameraManager.CameraMode.IVA)
+            {
+                //Trying to imitate example in KerbTrack: https://github.com/pizzaoverhead/KerbTrack/blob/master/KerbTrack/KerbTrack.cs#L402-459
+
+                float fovMaxIVA = 90f;
+                float fovMinIVA = 7.5f; 
+                float pitchMaxIVA = 120f;
+                float pitchMinIVA = -90f;
+                float yawMaxIVA = 135f;
+                float yawMinIVA = -135f;
+                float IVAscale = 0.5f;
+
+                float xMaxIVA = 0.15f;
+                float xMinIVA = -0.15f;
+                float yMaxIVA = 0.1f;
+                float yMinIVA = -0.1f;
+                float zMaxIVA = 0.1f;
+                float zMinIVA = -0.15f;
+
+                float pitchChange = m_CameraPitch.Update() * IVAscale;
+                float yawChange = m_CameraHeading.Update() * IVAscale;
+
+                Debug.LogWarning("FoV: " + InternalCamera.Instance.camera.fieldOfView);
+                Debug.LogWarning("Pitch: " + InternalCamera.Instance.transform.localRotation.Pitch());
+                Debug.LogWarning("Yaw: " + InternalCamera.Instance.transform.localRotation.Yaw());
+                Debug.LogWarning("PitchChange: "+ pitchChange);
+                Debug.LogWarning("YawChange: "+ yawChange);
+
+                //InternalCamera.Instance.transform.localEulerAngles = new Vector3(
+                //                    -Mathf.Clamp(1, pitchMinIVA, pitchMaxIVA),
+                //                    -Mathf.Clamp(1, yawMinIVA, yawMaxIVA),
+                //                    0);
+                //Quaternion rotChange = Quaternion.AngleAxis(m_CameraHeading.Update()*IVAscale, new Vector3(1, 0, 0));
+
+                System.Random r = new System.Random();
+
+                if (pitchChange != 0)
+                {
+                    //Transform t = InternalCamera.Instance.transform;
+                    //t.localRotation = Quaternion.AngleAxis(45f, t.up) * t.localRotation;
+                    //InternalCamera.Instance.SetTransform(t, false);
+                    //InternalCamera.Instance.transform.Rotate(InternalCamera.Instance.transform.up, r.Next(-45, 45), Space.World);
+                    InternalCamera.Instance.transform.localEulerAngles = new Vector3(-r.Next(-45, 45), -r.Next(-45, 45), 0);
+                }
+                if (yawChange >= 0.95 * IVAscale) {
+                    InternalCamera.Instance.SetTransform(InternalCamera.Instance.transform, true);
+                }
+                if (yawChange <= -0.95 * IVAscale)
+                {
+                    CameraManager.Instance.NextCameraIVA();
+
+                    InternalCamera.Instance.transform.localPosition = new Vector3(
+                                    Mathf.Clamp(0.5f, xMinIVA, xMaxIVA),
+                                    Mathf.Clamp(0.5f, yMinIVA, yMaxIVA),
+                                    0);
+                }
+
+                // Without setting the flight camera transform, the pod rotates about without changing the background.
+                FlightCamera.fetch.transform.rotation = InternalSpace.InternalToWorld(InternalCamera.Instance.transform.rotation);
+                FlightCamera.fetch.transform.position = InternalSpace.InternalToWorld(InternalCamera.Instance.transform.position);
+
+                Debug.LogWarning("Pitch2: " + InternalCamera.Instance.transform.localRotation.Pitch());
+                Debug.LogWarning("Yaw2: " + InternalCamera.Instance.transform.localRotation.Yaw());
+
+                float camChange = m_CameraZoom.Update();
+                if (camChange != 0)
+                    InternalCamera.Instance.SetFOV(Utility.Clamp(InternalCamera.Instance.camera.fieldOfView + camChange * 5.0f, fovMinIVA, fovMaxIVA));
+            }
+            else
+            {
+                //Debug.LogWarning("CamMode: " + CameraManager.Instance.currentCameraMode.ToString());
+                //InternalCamera.Instance.camera.
+                //FlightUIModeController.Instance.stagingQuadrant.
+                //FlightUIController.fetch.
+                
+                FlightCamera.CamHdg += m_CameraHeading.Update() * config.cameraSensitivity;
+                FlightCamera.CamPitch += m_CameraPitch.Update() * config.cameraSensitivity;
+                if (FlightCamera.fetch != null)
+                {
+                    FlightCamera.fetch.SetDistance(FlightCamera.fetch.Distance + m_CameraZoom.Update());
+                }
             }
         }
 
@@ -398,6 +485,14 @@ namespace KSPAdvancedFlyByWire
                     if (FlightInputHandler.fetch != null)
                     {
                         FlightInputHandler.fetch.precisionMode = !FlightInputHandler.fetch.precisionMode;
+                        //Change color on flight input gauges manually
+                        foreach (var r in FlightInputHandler.fetch.inputGaugeRenderers)
+                        {
+                            if (FlightInputHandler.fetch.precisionMode) 
+                                r.material.color = new Color(0.255f, 0.992f, 0.996f);
+                            else
+                                r.material.color = new Color(0.976f, 0.451f, 0.024f);
+                        }
                     }
                     return;
                 case DiscreteAction.ResetTrim:

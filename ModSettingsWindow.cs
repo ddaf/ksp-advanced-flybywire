@@ -63,6 +63,16 @@ namespace KSPAdvancedFlyByWire
             }
 
             GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Precision Mode limiter");
+            AdvancedFlyByWire.Instance.m_PrecisionFactorEnabled = GUILayout.Toggle(AdvancedFlyByWire.Instance.m_PrecisionFactorEnabled, "");
+
+            GUILayout.FlexibleSpace();
+            GUILayout.Label(AdvancedFlyByWire.Instance.m_PrecisionFactor.ToString("0.000"));
+            AdvancedFlyByWire.Instance.m_PrecisionFactor = GUILayout.HorizontalSlider(AdvancedFlyByWire.Instance.m_PrecisionFactor, 0.0f, 1.0f, GUILayout.Width(150));
+
+            GUILayout.EndHorizontal();
         }
 
         public void OnGUI()
