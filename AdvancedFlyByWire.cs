@@ -354,6 +354,14 @@ namespace KSPAdvancedFlyByWire
                 {
                     m_FlightManager.OnFlyByWire(new FlightCtrlState());
                 }
+                //If done within OnFlyByWire KSP overwrites rotation changes?
+                if (CameraManager.Instance.currentCameraMode == CameraManager.CameraMode.IVA)
+                {
+                    InternalCamera cam = InternalCamera.Instance;
+                    cam.transform.localRotation *= Quaternion.Euler(-m_FlightManager.m_ivaPitch, m_FlightManager.m_ivaYaw, 0);
+                    FlightCamera.fetch.transform.rotation = InternalSpace.InternalToWorld(cam.transform.rotation);
+                    Debug.Log("Cam rotation: " + cam.transform.localRotation.ToString());
+                }
             }
 
             if(Input.GetKey("left shift") && Input.GetKey("l"))
