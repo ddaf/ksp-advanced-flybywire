@@ -21,8 +21,8 @@ namespace KSPAdvancedFlyByWire
         public bool m_UseKSPSkin = true;
         public bool m_UseOldPresetsWindow = false;
 
-        public bool m_PrecisionFactorEnabled = false;
-        public float m_PrecisionFactor = 0.5f;
+        public bool m_UsePrecisionModeFactor = false;
+        public float m_PrecisionModeFactor = 0.5f;
 
         // Configuration
         private Configuration m_Configuration = null;
@@ -44,10 +44,10 @@ namespace KSPAdvancedFlyByWire
             }
         }
 
-        public float GetPrecisionFactor()
+        public float GetPrecisionModeFactor()
         {
             bool precisionModeEnabled = FlightInputHandler.fetch != null && FlightInputHandler.fetch.precisionMode;
-            return (precisionModeEnabled && m_PrecisionFactorEnabled) ? m_PrecisionFactor : 1;
+            return (precisionModeEnabled && m_UsePrecisionModeFactor) ? m_PrecisionModeFactor : 1;
         }
 
         public string GetAbsoluteConfigurationPath()
@@ -121,6 +121,14 @@ namespace KSPAdvancedFlyByWire
                         configNode.SetValue("useOldPresetEditor", "true");
                     }
                 }
+
+                if (configNode.HasValue("usePrecisionModeFactor"))
+                {
+                    if (configNode.GetValue("usePrecisionModeFactor") == "true")
+                    {
+                        configNode.SetValue("usePrecisionModeFactor", "true");
+                    }
+                }
             }
             
             m_Configuration = Configuration.Deserialize(GetAbsoluteConfigurationPath());
@@ -135,11 +143,12 @@ namespace KSPAdvancedFlyByWire
 
         public void SaveState(ConfigNode configNode)
         {
-            Debug.LogWarning("--- FlyByWire SAVE STATE ---");
+            Debug.Log("--- FlyByWire: Saving State  ---");
             if (configNode != null)
             {
                 configNode.SetValue("useStockSkin", m_UseKSPSkin ? "true" : "false");
                 configNode.SetValue("useOldPresetEditor", m_UseOldPresetsWindow ? "true" : "false");
+                configNode.SetValue("usePrecisionModeFactor", m_UsePrecisionModeFactor ? "true" : "false");
             }
 
             Configuration.Serialize(GetAbsoluteConfigurationPath(), m_Configuration);
